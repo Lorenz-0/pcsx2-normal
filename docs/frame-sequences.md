@@ -11,24 +11,29 @@ rerecording, automatic input capture, or seek-to-frame emulation.
 ## Enter a combo
 
 1. Select one of the 16 **Combo** slots and enter a name.
-2. Each grid row is **one emulated frame**. Click a button cell to toggle its
-   checkbox, or select it and press Space. Check multiple columns for a chord.
-   An entirely unchecked row is **Neutral**.
+2. **Compact frames** is enabled by default. Consecutive identical inputs are
+   combined into a single row: for example, Neutral for 20 frames or Down + Square
+   held for 4 frames. **Frame range** shows the actual start/end frames and
+   **Frames** shows the duration. Double-click **Frames** to edit that duration.
+   Click button checkboxes to change the inputs for the **whole compacted row**.
+   Identical neighboring rows merge automatically after editing.
 3. Use the frame-count box with **Append Neutral** or **Insert Before Selection**
-   to add rows. Select cells across a range of rows and use **Delete Selected
-   Frames** to remove those frames. At least one neutral frame always remains.
+   to add frames. Select rows and use **Delete Selected Rows** to remove their
+   entire frame ranges. At least one neutral frame always remains.
+   To edit, insert, or delete inside a held/neutral range, uncheck **Compact
+   frames** first: every frame is then shown separately, with the same button
+   controls. Switching views never changes any inputs or their timing.
 4. Click **Save** to persist the selected combo to the global Player 1 macro slot.
    You can test a draft without saving it.
 
 Example (not a guaranteed combo in any particular game):
 
-| Frame | Checked columns |
-| ---: | --- |
-| 1 | Down |
-| 2 | Down |
-| 3 | Down, Right |
-| 4 | Right, Square |
-| 5–9 | None (Neutral) |
+| Frame range | Frames | Checked columns |
+| --- | ---: | --- |
+| 1–2 | 2 | Down |
+| 3 | 1 | Down, Right |
+| 4 | 1 | Right, Square |
+| 5–9 (Neutral) | 5 | None |
 
 Supported buttons: `Up`, `Right`, `Down`, `Left`, `Triangle`, `Circle`, `Cross`,
 `Square`, `Select`, `Start`, `L1`, `L2`, `R1`, `R2`, `L3`, `R3`. `Cross` is the
@@ -49,7 +54,7 @@ Start a game with a Player 1 DualShock 2 controller, then use:
 - **Pause / Resume:** pause or continue emulation without restarting the combo.
 - **Stop:** cancel the override and restore live Player 1 input. This does not
   change whether emulation is paused.
-- **Follow playhead:** keep the prepared input frame in view. The frame marker
+- **Follow playhead:** keep the row containing the prepared input frame in view. The frame marker
   and status are refreshed asynchronously; they do not control input timing.
 
 Edits during playback apply only on the next Arm/Play. Closing the tool cancels

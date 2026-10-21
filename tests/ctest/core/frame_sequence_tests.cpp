@@ -222,3 +222,65 @@ TEST(FrameSequence, PlayheadCountsPreparedFramesAndResets)
 	EXPECT_EQ(player.GetPosition(), 0u);
 	EXPECT_EQ(player.GetTotalFrames(), 0u);
 }
+
+TEST(FrameSequence, CompactsNeutralAndIdenticalHeldFramesWithoutChangingInputs)
+{
+	const auto steps = Parse("20:Neutral;4:Down & Square;1:Square;5:Neutral");
+	ASSERT_TRUE(steps.has_value());
+	const auto frames = Expand(steps.value());
+	ASSERT_TRUE(frames.has_value());
+	const auto ranges = BuildFrameRanges(frames.value(), true);
+	ASSERT_EQ(ranges.size(), 4u);
+	const std::array<std::size_t, 4> starts = {0, 20, 24, 25};
+	const std::array<std::size_t, 4> counts = {20, 4, 1, 5};
+	std::vector<std::uint16_t> reconstructed;
+	for (std::size_t row = 0; row < ranges.size(); row++)
+	{
+		EXPECT_EQ(ranges[row].first, starts[row]);
+		EXPECT_EQ(ranges[row].count, counts[row]);
+		reconstructed.insert(reconstructed.end(), ranges[row].count, frames.value()[ranges[row].first]);
+	}
+	EXPECT_EQ(reconstructed, frames.value());
+}
+
+TEST(FrameSequence, ExpandedRowsPreserveEveryIndividualFrame)
+{
+	const std::vector<std::uint16_t> frames = {0, 0, 132, 132, 128, 0};
+	const auto ranges = BuildFrameRanges(frames, false);
+	ASSERT_EQ(ranges.size(), frames.size());
+	for (std::size_t row = 0; row < ranges.size(); row++)
+	{
+		EXPECT_EQ(ranges[row].first, row);
+		EXPECT_EQ(ranges[row].count, 1u);
+		EXPECT_EQ(FindFrameRow(ranges, row), static_cast<int>(row));
+	}
+	EXPECT_EQ(FindFrameRow(ranges, frames.size()), -1);
+}
+
+TEST(FrameSequence, CompactedPlayheadMapsFirstLastAndBoundaryFrames)
+{
+	const std::vector<std::uint16_t> frames = {0, 0, 132, 132, 128, 0};
+	const auto ranges = BuildFrameRanges(frames, true);
+	const std::array<int, 6> expected = {0, 0, 1, 1, 2, 3};
+	for (std::size_t frame = 0; frame < expected.size(); frame++)
+		EXPECT_EQ(FindFrameRow(ranges, frame), expected[frame]);
+	EXPECT_EQ(FindFrameRow(ranges, frames.size()), -1);
+	EXPECT_EQ(FindFrameRow({}, 0), -1);
+	EXPECT_TRUE(BuildFrameRanges({}, true).empty());
+}
+
+TEST(FrameSequence, CompactViewCanDisplayAndRepairOverLimitDrafts)
+{
+	std::vector<std::uint16_t> frames(MAX_STEPS + 1);
+	for (std::size_t frame = 0; frame < frames.size(); frame++)
+		frames[frame] = static_cast<std::uint16_t>(frame % 2);
+	EXPECT_FALSE(Compress(frames).has_value());
+	const auto ranges = BuildFrameRanges(frames, true);
+	EXPECT_EQ(ranges.size(), frames.size());
+	EXPECT_EQ(FindFrameRow(ranges, frames.size() - 1), static_cast<int>(frames.size() - 1));
+	frames.assign(MAX_FRAMES, 0);
+	const auto neutral = BuildFrameRanges(frames, true);
+	ASSERT_EQ(neutral.size(), 1u);
+	EXPECT_EQ(neutral[0].count, MAX_FRAMES);
+	EXPECT_EQ(FindFrameRow(neutral, MAX_FRAMES - 1), 0);
+}

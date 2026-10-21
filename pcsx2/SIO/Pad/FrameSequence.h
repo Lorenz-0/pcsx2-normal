@@ -160,6 +160,44 @@ namespace Pad::FrameSequence
 		return steps;
 	}
 
+	// Display-only frame ranges. Unlike Compress(), this accepts drafts with more than
+	// MAX_STEPS groups so the editor can still show and repair them before playback.
+	struct FrameRange
+	{
+		std::size_t first;
+		std::size_t count;
+	};
+
+	inline std::vector<FrameRange> BuildFrameRanges(std::span<const std::uint16_t> frames, bool compact)
+	{
+		std::vector<FrameRange> ranges;
+		for (std::size_t frame = 0; frame < frames.size(); frame++)
+		{
+			if (compact && frame > 0 && frames[frame] == frames[frame - 1])
+				ranges.back().count++;
+			else
+				ranges.push_back({frame, 1});
+		}
+		return ranges;
+	}
+
+	inline int FindFrameRow(std::span<const FrameRange> ranges, std::size_t frame)
+	{
+		// Binary search keeps playhead polling cheap in expanded, long timelines.
+		std::size_t first = 0, last = ranges.size();
+		while (first < last)
+		{
+			const std::size_t middle = first + (last - first) / 2;
+			if (frame < ranges[middle].first)
+				last = middle;
+			else if (frame - ranges[middle].first >= ranges[middle].count)
+				first = middle + 1;
+			else
+				return static_cast<int>(middle);
+		}
+		return -1;
+	}
+
 	class Player
 	{
 	public:
