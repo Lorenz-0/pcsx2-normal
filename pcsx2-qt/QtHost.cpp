@@ -2502,7 +2502,8 @@ int main(int argc, char* argv[])
 	QtHost::RegisterTypes();
 
 	PCSX2MainApplication app(argc, argv);
-	app.setApplicationDisplayName(QtHost::GetAppName());
+	// Titles already include our build name. Setting applicationDisplayName here
+	// makes Qt append it again on Windows when a version/config suffix follows.
 
 	QtHost::InitializeClipboard();
 
