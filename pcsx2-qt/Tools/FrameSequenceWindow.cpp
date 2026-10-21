@@ -337,7 +337,7 @@ FrameSequenceWindow::FrameSequenceWindow(QWidget* parent)
 	QVBoxLayout* layout = new QVBoxLayout(central);
 	QLabel* help = new QLabel(tr("Compact rows combine identical held inputs or Neutral. Double-click Frames to change their duration. "
 								 "Use Arm + Pause, then Frame Advance to test from frame 1. Edits apply on the next Arm/Play. "
-								 "Button edits affect the whole row. Insert Before Selection keeps the new row separate. "
+								 "Button edits affect the whole row. Insert Frame adds a separate row at the end. "
 								 "Uncheck Compact frames to edit individual frames."),
 		central);
 	help->setWordWrap(true);
@@ -360,7 +360,7 @@ FrameSequenceWindow::FrameSequenceWindow(QWidget* parent)
 	m_add_count->setSuffix(tr(" frames"));
 	rows->addWidget(m_add_count);
 	QPushButton* append = new QPushButton(tr("Append Neutral"), central);
-	QPushButton* insert = new QPushButton(tr("Insert Before Selection"), central);
+	QPushButton* insert = new QPushButton(tr("Insert Frame"), central);
 	QPushButton* remove = new QPushButton(tr("Delete Selected Rows"), central);
 	rows->addWidget(append);
 	rows->addWidget(insert);
@@ -376,8 +376,7 @@ FrameSequenceWindow::FrameSequenceWindow(QWidget* parent)
 	layout->addLayout(rows);
 	connect(append, &QPushButton::clicked, this, [this]() { m_model->insertFrames(m_model->rowCount(), m_add_count->value()); });
 	connect(insert, &QPushButton::clicked, this, [this]() {
-		const int frame = m_model->insertFrames(m_table->currentIndex().isValid() ? m_table->currentIndex().row() : 0,
-			m_add_count->value(), true);
+		const int frame = m_model->insertFrames(m_model->rowCount(), m_add_count->value(), true);
 		if (frame >= 0)
 		{
 			const QModelIndex index = m_model->index(m_model->frameRow(frame), 2);
