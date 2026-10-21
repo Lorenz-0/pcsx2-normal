@@ -1624,6 +1624,7 @@ void InputManager::ReloadBindings(SettingsInterface& si, SettingsInterface& bind
 
 	std::unique_lock lock(s_binding_map_write_lock);
 
+	VMManager::Internal::ResetFrameAdvanceHotkeyState();
 	s_binding_map.clear();
 	s_pad_vibration_array.clear();
 	s_keyboard_event_callbacks.clear();
@@ -1719,6 +1720,8 @@ void InputManager::PollSources()
 	}
 
 	GenerateRelativeMouseEvents();
+
+	VMManager::Internal::PollFrameAdvanceHotkey();
 
 	if (VMManager::GetState() == VMState::Running && !s_pad_vibration_array.empty())
 		UpdateContinuedVibration();

@@ -1684,6 +1684,8 @@ VMBootResult VMManager::Initialize(const VMBootParameters& boot_params, Error* e
 
 void VMManager::Shutdown(bool save_resume_state)
 {
+	Internal::ResetFrameAdvanceHotkeyState();
+
 	// we'll probably already be stopping (this is how Qt calls shutdown),
 	// but just in case, so any of the stuff we call here knows we don't have a valid VM.
 	s_state.store(VMState::Stopping, std::memory_order_release);
@@ -1799,6 +1801,7 @@ bool VMManager::RequestReset()
 void VMManager::Reset()
 {
 	pxAssert(HasValidVM());
+	Internal::ResetFrameAdvanceHotkeyState();
 
 	// If we're running, we're probably going to be executing this at event test time,
 	// at vsync, which happens in the middle of event handling. Resetting everything

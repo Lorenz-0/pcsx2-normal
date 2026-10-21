@@ -20,10 +20,50 @@
 #include "common/Timer.h"
 
 static std::optional<LimiterModeType> s_limiter_mode_prior_to_hold_interaction;
+static std::optional<Common::Timer::Value> s_frame_advance_next_repeat;
+
+void VMManager::Internal::ResetFrameAdvanceHotkeyState()
+{
+	s_frame_advance_next_repeat.reset();
+}
+
+u32 VMManager::Internal::GetFrameAdvancePollInterval()
+{
+	if (!s_frame_advance_next_repeat.has_value())
+		return 100;
+
+	const Common::Timer::Value now = Common::Timer::GetCurrentValue();
+	if (now >= s_frame_advance_next_repeat.value())
+		return 1;
+
+	return static_cast<u32>(std::clamp(std::ceil(Common::Timer::ConvertValueToMilliseconds(
+		s_frame_advance_next_repeat.value() - now)), 1.0, 100.0));
+}
+
+void VMManager::Internal::PollFrameAdvanceHotkey()
+{
+	if (!s_frame_advance_next_repeat.has_value())
+		return;
+
+	if (!VMManager::HasValidVM() || Achievements::IsHardcoreModeActive())
+	{
+		ResetFrameAdvanceHotkeyState();
+		return;
+	}
+
+	const Common::Timer::Value now = Common::Timer::GetCurrentValue();
+	// Wait for the previous step to finish. Never queue catch-up frames after a slow frame.
+	if (VMManager::GetState() != VMState::Paused || now < s_frame_advance_next_repeat.value())
+		return;
+
+	s_frame_advance_next_repeat = now + Common::Timer::ConvertMillisecondsToValue(25.0);
+	VMManager::FrameAdvance(1);
+}
 
 void VMManager::Internal::ResetVMHotkeyState()
 {
 	s_limiter_mode_prior_to_hold_interaction.reset();
+	ResetFrameAdvanceHotkeyState();
 }
 
 static void HotkeyAdjustTargetSpeed(double delta)
@@ -175,8 +215,20 @@ DEFINE_HOTKEY(
 	})
 DEFINE_HOTKEY(
 	"FrameAdvance", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Frame Advance"), [](s32 pressed) {
-		if (pressed > 0 && VMManager::HasValidVM())
+		if (pressed <= 0)
+		{
+			// Release and chord cancellation both stop repeating.
+			VMManager::Internal::ResetFrameAdvanceHotkeyState();
+		}
+		else if (!s_frame_advance_next_repeat.has_value() && VMManager::HasValidVM())
+		{
+			if (!Achievements::IsHardcoreModeActive())
+			{
+				s_frame_advance_next_repeat = Common::Timer::GetCurrentValue() +
+					Common::Timer::ConvertMillisecondsToValue(300.0);
+			}
 			VMManager::FrameAdvance(1);
+		}
 	})
 DEFINE_HOTKEY("ToggleFrameLimit", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Toggle Frame Limit"),
 	[](s32 pressed) {

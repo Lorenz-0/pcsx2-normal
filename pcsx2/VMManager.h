@@ -298,6 +298,15 @@ namespace VMManager
 		/// Resets any state for hotkey-related VMs, called on VM startup.
 		void ResetVMHotkeyState();
 
+		/// Cancels held frame advance, including when input bindings are replaced.
+		void ResetFrameAdvanceHotkeyState();
+
+		/// Services held frame advance after input events have been processed, on the CPU thread.
+		void PollFrameAdvanceHotkey();
+
+		/// Maximum idle polling interval in milliseconds while waiting for the next frame advance.
+		u32 GetFrameAdvancePollInterval();
+
 		/// Updates the variables in the EmuFolders namespace, reloading subsystems if needed.
 		void UpdateEmuFolders();
 

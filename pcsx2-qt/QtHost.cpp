@@ -453,7 +453,8 @@ void EmuThread::createBackgroundControllerPollTimer()
 	pxAssert(!m_background_controller_polling_timer);
 	m_background_controller_polling_timer = new QTimer(this);
 	m_background_controller_polling_timer->setSingleShot(false);
-	m_background_controller_polling_timer->setTimerType(Qt::CoarseTimer);
+	// Avoid early repeat deadlines; timer precision still needs proper testing on Windows.
+	m_background_controller_polling_timer->setTimerType(Qt::PreciseTimer);
 	connect(m_background_controller_polling_timer, &QTimer::timeout, this, &EmuThread::doBackgroundControllerPoll);
 }
 
@@ -465,11 +466,17 @@ void EmuThread::destroyBackgroundControllerPollTimer()
 
 void EmuThread::startBackgroundControllerPollTimer()
 {
-	if (m_background_controller_polling_timer->isActive())
+	// Paused emulation normally polls at 100 ms, which is too slow for held frame advance.
+	const u32 interval = std::min(
+		FullscreenUI::IsInitialized() ? FULLSCREEN_UI_CONTROLLER_POLLING_INTERVAL : BACKGROUND_CONTROLLER_POLLING_INTERVAL,
+		VMManager::Internal::GetFrameAdvancePollInterval());
+	if (m_background_controller_polling_timer->isActive() &&
+		m_background_controller_polling_timer->interval() == static_cast<int>(interval))
+	{
 		return;
+	}
 
-	m_background_controller_polling_timer->start(
-		FullscreenUI::IsInitialized() ? FULLSCREEN_UI_CONTROLLER_POLLING_INTERVAL : BACKGROUND_CONTROLLER_POLLING_INTERVAL);
+	m_background_controller_polling_timer->start(static_cast<int>(interval));
 }
 
 void EmuThread::stopBackgroundControllerPollTimer()
@@ -483,6 +490,10 @@ void EmuThread::stopBackgroundControllerPollTimer()
 void EmuThread::doBackgroundControllerPoll()
 {
 	VMManager::IdlePollUpdate();
+
+	// Input may have released frame advance or started a step (which stops this timer).
+	if (m_background_controller_polling_timer->isActive())
+		startBackgroundControllerPollTimer();
 }
 
 void EmuThread::toggleFullscreen()
