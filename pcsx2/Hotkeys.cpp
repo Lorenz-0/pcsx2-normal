@@ -175,7 +175,7 @@ DEFINE_HOTKEY(
 	})
 DEFINE_HOTKEY(
 	"FrameAdvance", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Frame Advance"), [](s32 pressed) {
-		if (!pressed && VMManager::HasValidVM())
+		if (pressed > 0 && VMManager::HasValidVM())
 			VMManager::FrameAdvance(1);
 	})
 DEFINE_HOTKEY("ToggleFrameLimit", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Toggle Frame Limit"),
