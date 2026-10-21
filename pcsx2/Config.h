@@ -1336,6 +1336,18 @@ struct Pcsx2Config
 		bool operator!=(const AchievementsOptions& right) const;
 	};
 
+	struct FrameAdvanceOptions
+	{
+		static constexpr int DEFAULT_HOLD_DELAY = 300;
+		static constexpr int DEFAULT_REPEAT_INTERVAL = 25;
+		static constexpr int MAX_INTERVAL = 10000;
+
+		int HoldDelay = DEFAULT_HOLD_DELAY;
+		int RepeatInterval = DEFAULT_REPEAT_INTERVAL;
+
+		void LoadSave(SettingsWrapper& wrap);
+	};
+
 	struct SavestateOptions
 	{
 		SavestateOptions();
@@ -1386,6 +1398,7 @@ struct Pcsx2Config
 	ProfilerOptions Profiler;
 	DebugAnalysisOptions DebuggerAnalysis;
 	EmulationSpeedOptions EmulationSpeed;
+	FrameAdvanceOptions FrameAdvance;
 	SavestateOptions Savestate;
 	SPU2Options SPU2;
 	DEV9Options DEV9;

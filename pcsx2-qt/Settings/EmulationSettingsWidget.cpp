@@ -4,6 +4,7 @@
 #include <QtWidgets/QInputDialog>
 #include <QtWidgets/QMessageBox>
 
+#include "pcsx2/Config.h"
 #include "pcsx2/Host.h"
 
 #include "EmulationSettingsWidget.h"
@@ -27,6 +28,14 @@ EmulationSettingsWidget::EmulationSettingsWidget(SettingsWindow* settings_dialog
 	initializeSpeedCombo(m_ui.normalSpeed, "Framerate", "NominalScalar", 1.0f);
 	initializeSpeedCombo(m_ui.fastForwardSpeed, "Framerate", "TurboScalar", 2.0f);
 	initializeSpeedCombo(m_ui.slowMotionSpeed, "Framerate", "SlomoScalar", 0.5f);
+
+	using FrameAdvanceOptions = Pcsx2Config::FrameAdvanceOptions;
+	m_ui.frameAdvanceHoldDelay->setRange(0, FrameAdvanceOptions::MAX_INTERVAL);
+	m_ui.frameAdvanceRepeatInterval->setRange(1, FrameAdvanceOptions::MAX_INTERVAL);
+	SettingWidgetBinder::BindWidgetToIntSetting(sif, m_ui.frameAdvanceHoldDelay,
+		"EmuCore/FrameAdvance", "HoldDelay", FrameAdvanceOptions::DEFAULT_HOLD_DELAY);
+	SettingWidgetBinder::BindWidgetToIntSetting(sif, m_ui.frameAdvanceRepeatInterval,
+		"EmuCore/FrameAdvance", "RepeatInterval", FrameAdvanceOptions::DEFAULT_REPEAT_INTERVAL);
 
 	SettingWidgetBinder::BindWidgetToIntSetting(sif, m_ui.maxFrameLatency, "EmuCore/GS", "VsyncQueueSize", DEFAULT_FRAME_LATENCY);
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.vsync, "EmuCore/GS", "VsyncEnable", false);
@@ -109,6 +118,15 @@ EmulationSettingsWidget::EmulationSettingsWidget(SettingsWindow* settings_dialog
 	//: The "User Preference" string will appear after the text "Recommended Value:"
 	dialog()->registerWidgetHelp(m_ui.slowMotionSpeed, tr("Slow-Motion Speed"), tr("User Preference"),
 		tr("Sets the slow-motion speed. This speed will be used when the slow-motion hotkey is pressed/toggled."));
+
+	dialog()->registerWidgetHelp(m_ui.frameAdvanceHoldDelay, tr("Frame Advance Hold Delay"),
+		tr("%1 ms").arg(FrameAdvanceOptions::DEFAULT_HOLD_DELAY),
+		tr("Time to hold the Frame Advance hotkey after the immediate first frame before repeating starts. "
+		   "Set to 0 ms to start repeating without a hold delay. Changes take effect on the next press."));
+	dialog()->registerWidgetHelp(m_ui.frameAdvanceRepeatInterval, tr("Frame Advance Repeat Interval"),
+		tr("%1 ms").arg(FrameAdvanceOptions::DEFAULT_REPEAT_INTERVAL),
+		tr("Minimum time between repeated frame advances while the hotkey is held. "
+		   "Actual timing depends on how quickly each frame can finish. Releasing the hotkey stops repeating."));
 
 	dialog()->registerWidgetHelp(m_ui.eeCycleRate, tr("EE Cycle Rate"), tr("100% (Normal Speed)"),
 		tr("Higher values may increase internal framerate in games, but will increase CPU requirements substantially. "

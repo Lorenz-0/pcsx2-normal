@@ -1957,6 +1957,20 @@ bool Pcsx2Config::AchievementsOptions::operator!=(const AchievementsOptions& rig
 	return !this->operator==(right);
 }
 
+void Pcsx2Config::FrameAdvanceOptions::LoadSave(SettingsWrapper& wrap)
+{
+	SettingsWrapSection("EmuCore/FrameAdvance");
+
+	SettingsWrapEntry(HoldDelay);
+	SettingsWrapEntry(RepeatInterval);
+
+	if (wrap.IsLoading())
+	{
+		HoldDelay = std::clamp(HoldDelay, 0, MAX_INTERVAL);
+		RepeatInterval = std::clamp(RepeatInterval, 1, MAX_INTERVAL);
+	}
+}
+
 Pcsx2Config::Pcsx2Config()
 {
 	bitset = 0;
@@ -2052,6 +2066,7 @@ void Pcsx2Config::LoadSaveCore(SettingsWrapper& wrap)
 
 	BaseFilenames.LoadSave(wrap);
 	EmulationSpeed.LoadSave(wrap);
+	FrameAdvance.LoadSave(wrap);
 	LoadSaveMemcards(wrap);
 
 	if (wrap.IsLoading())

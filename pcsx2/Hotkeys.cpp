@@ -56,7 +56,7 @@ void VMManager::Internal::PollFrameAdvanceHotkey()
 	if (VMManager::GetState() != VMState::Paused || now < s_frame_advance_next_repeat.value())
 		return;
 
-	s_frame_advance_next_repeat = now + Common::Timer::ConvertMillisecondsToValue(25.0);
+	s_frame_advance_next_repeat = now + Common::Timer::ConvertMillisecondsToValue(EmuConfig.FrameAdvance.RepeatInterval);
 	VMManager::FrameAdvance(1);
 }
 
@@ -225,7 +225,7 @@ DEFINE_HOTKEY(
 			if (!Achievements::IsHardcoreModeActive())
 			{
 				s_frame_advance_next_repeat = Common::Timer::GetCurrentValue() +
-					Common::Timer::ConvertMillisecondsToValue(300.0);
+					Common::Timer::ConvertMillisecondsToValue(EmuConfig.FrameAdvance.HoldDelay);
 			}
 			VMManager::FrameAdvance(1);
 		}
