@@ -20,6 +20,7 @@
 #include "Settings/InterfaceSettingsWidget.h"
 #include "Settings/MemoryCardCreateDialog.h"
 #include "Tools/InputRecording/InputRecordingViewer.h"
+#include "Tools/FrameSequenceWindow.h"
 #include "Tools/InputRecording/NewInputRecordingDlg.h"
 #include "ToolbarCustomizationDialog.h"
 
@@ -618,6 +619,9 @@ void MainWindow::connectSignals()
 	connect(m_ui.actionEditPatches, &QAction::triggered, this, [this]() { onToolsEditCheatsPatchesTriggered(false); });
 	connect(m_ui.actionEditCheats, &QAction::triggered, this, [this]() { onToolsEditCheatsPatchesTriggered(true); });
 
+	connect(m_ui.actionInputTimeline, &QAction::triggered, this, [this]() { showFrameSequenceEditor(); });
+	m_ui.actionInputTimeline->setShortcutContext(Qt::ApplicationShortcut);
+
 	// Input Recording
 	connect(m_ui.actionInputRecNew, &QAction::triggered, this, &MainWindow::onInputRecNewActionTriggered);
 	connect(m_ui.actionInputRecPlay, &QAction::triggered, this, &MainWindow::onInputRecPlayActionTriggered);
@@ -828,6 +832,13 @@ void MainWindow::destroySubWindows()
 		m_settings_window->close();
 		m_settings_window->deleteLater();
 		m_settings_window = nullptr;
+	}
+
+	if (m_frame_sequence_window)
+	{
+		m_frame_sequence_window->close();
+		m_frame_sequence_window->deleteLater();
+		m_frame_sequence_window = nullptr;
 	}
 
 	SettingsWindow::closeGamePropertiesDialogs();
@@ -3426,6 +3437,17 @@ void MainWindow::openDebugger()
 {
 	DebuggerWindow* dwnd = DebuggerWindow::getInstance();
 	dwnd->isVisible() ? dwnd->activateWindow() : dwnd->show();
+}
+
+void MainWindow::showFrameSequenceEditor(int slot)
+{
+	if (!m_frame_sequence_window)
+		m_frame_sequence_window = new FrameSequenceWindow(this);
+	m_frame_sequence_window->show();
+	m_frame_sequence_window->raise();
+	m_frame_sequence_window->activateWindow();
+	if (slot >= 0)
+		m_frame_sequence_window->selectSlot(slot);
 }
 
 void MainWindow::doControllerSettings(ControllerSettingsWindow::Category category)

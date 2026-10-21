@@ -26,6 +26,7 @@ class DisplaySurface;
 class DisplayContainer;
 class GameListWidget;
 class ControllerSettingsWindow;
+class FrameSequenceWindow;
 
 class EmuThread;
 
@@ -46,6 +47,8 @@ class MainWindow final : public QMainWindow
 	Q_OBJECT
 
 public:
+	void showFrameSequenceEditor(int slot = -1);
+
 	/// This class is a scoped lock on the VM, which prevents it from running while
 	/// the object exists. Its purpose is to be used for blocking/modal popup boxes,
 	/// where the VM needs to exit fullscreen temporarily.
@@ -329,6 +332,7 @@ private:
 	SettingsWindow* m_settings_window = nullptr;
 	ControllerSettingsWindow* m_controller_settings_window = nullptr;
 	InputRecordingViewer* m_input_recording_viewer = nullptr;
+	FrameSequenceWindow* m_frame_sequence_window = nullptr;
 	AutoUpdaterDialog* m_auto_updater_dialog = nullptr;
 
 	QProgressBar* m_status_progress_widget = nullptr;

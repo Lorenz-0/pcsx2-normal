@@ -154,6 +154,9 @@
     <ClCompile Include="Settings\MemoryCardConvertWorker.cpp">
       <Filter>Settings</Filter>
     </ClCompile>
+    <ClCompile Include="Tools\FrameSequenceWindow.cpp">
+      <Filter>Tools</Filter>
+    </ClCompile>
     <ClCompile Include="Tools\InputRecording\InputRecordingViewer.cpp">
       <Filter>Tools\Input Recording</Filter>
     </ClCompile>
@@ -408,6 +411,9 @@
     </QtMoc>
     <QtMoc Include="Settings\AchievementSettingsWidget.h">
       <Filter>Settings</Filter>
+    </QtMoc>
+    <QtMoc Include="Tools\FrameSequenceWindow.h">
+      <Filter>Tools</Filter>
     </QtMoc>
     <QtMoc Include="Tools\InputRecording\InputRecordingViewer.h" />
     <QtMoc Include="Settings\DebugAnalysisSettingsWidget.h">

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Config.h"
+#include "SIO/Pad/FrameSequence.h"
 #include "Input/InputManager.h"
 #include "SIO/Pad/PadTypes.h"
 
@@ -79,6 +80,16 @@ namespace Pad
 	// Player 1 DualShock 2 frame sequences, using the existing macro trigger slots.
 	void SetInputSequenceTrigger(u32 index, s32 pressed);
 	void CancelInputSequence();
+	// CPU-thread-only direct playback for the standalone editor (independent of active input profiles).
+	bool StartInputSequence(std::span<const FrameSequence::Step> steps);
+	struct InputSequenceStatus
+	{
+		bool active;
+		u32 position;
+		u32 total;
+		int macro_slot; // -1 for direct editor playback.
+	};
+	InputSequenceStatus GetInputSequenceStatus();
 	// Called once per emulated input frame, not during paused/idle input polling.
 	void UpdateInputSequence();
 }; // namespace Pad

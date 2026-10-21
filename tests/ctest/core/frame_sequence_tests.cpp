@@ -162,3 +162,63 @@ TEST(FrameSequence, RejectsInvalidDirectPrograms)
 	player.Start(too_long);
 	EXPECT_FALSE(player.IsActive());
 }
+
+TEST(FrameSequence, TimelineRoundTripPreservesEveryFrame)
+{
+	const auto steps = Parse("2:Down;1:Down & Right;1:Right & Square;5:Neutral");
+	ASSERT_TRUE(steps.has_value());
+	const auto frames = Expand(steps.value());
+	ASSERT_TRUE(frames.has_value());
+	EXPECT_EQ(frames.value(), (std::vector<std::uint16_t>{4, 4, 6, 130, 0, 0, 0, 0, 0}));
+	const auto compressed = Compress(frames.value());
+	ASSERT_TRUE(compressed.has_value());
+	EXPECT_EQ(Serialize(compressed.value()), Serialize(steps.value()));
+}
+
+TEST(FrameSequence, TimelineEditsSplitAndMergeRuns)
+{
+	std::vector<std::uint16_t> frames = {0, 0, 0};
+	frames[1] = 128;
+	const auto split = Compress(frames);
+	ASSERT_TRUE(split.has_value());
+	EXPECT_EQ(Serialize(split.value()), "1:Neutral;1:Square;1:Neutral");
+	frames[0] = 128;
+	const auto merged = Compress(frames);
+	ASSERT_TRUE(merged.has_value());
+	EXPECT_EQ(Serialize(merged.value()), "2:Square;1:Neutral");
+}
+
+TEST(FrameSequence, TimelineLimitsAndEmptyInputs)
+{
+	EXPECT_FALSE(Expand({}).has_value());
+	EXPECT_FALSE(Compress({}).has_value());
+	const std::array<Step, 1> invalid = {{{0, 0}}};
+	EXPECT_FALSE(Expand(invalid).has_value());
+	std::vector<std::uint16_t> frames(MAX_FRAMES, 0);
+	EXPECT_TRUE(Compress(frames).has_value());
+	frames.push_back(0);
+	EXPECT_FALSE(Compress(frames).has_value());
+	frames.resize(MAX_STEPS + 1);
+	for (std::size_t i = 0; i < frames.size(); i++)
+		frames[i] = static_cast<std::uint16_t>(i % 2);
+	EXPECT_FALSE(Compress(frames).has_value());
+}
+
+TEST(FrameSequence, PlayheadCountsPreparedFramesAndResets)
+{
+	Player player;
+	const auto steps = Parse("2:Square;1:Neutral");
+	ASSERT_TRUE(steps.has_value());
+	player.Start(steps.value());
+	EXPECT_EQ(player.GetTotalFrames(), 3u);
+	EXPECT_EQ(player.GetPosition(), 0u);
+	player.NextFrame();
+	EXPECT_EQ(player.GetPosition(), 1u);
+	player.NextFrame();
+	EXPECT_EQ(player.GetPosition(), 2u);
+	player.NextFrame();
+	EXPECT_EQ(player.GetPosition(), 3u);
+	EXPECT_FALSE(player.NextFrame().has_value());
+	EXPECT_EQ(player.GetPosition(), 0u);
+	EXPECT_EQ(player.GetTotalFrames(), 0u);
+}

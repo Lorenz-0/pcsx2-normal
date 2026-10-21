@@ -3,13 +3,8 @@
 
 #include <QtCore/QDir>
 #include <QtWidgets/QInputDialog>
-#include <QtWidgets/QDialog>
-#include <QtWidgets/QDialogButtonBox>
-#include <QtWidgets/QFormLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QSpinBox>
-#include <QtWidgets/QTableWidget>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QScrollArea>
@@ -22,7 +17,6 @@
 
 #include "pcsx2/Host.h"
 #include "pcsx2/SIO/Pad/Pad.h"
-#include "pcsx2/SIO/Pad/FrameSequence.h"
 #include "pcsx2/SIO/Sio.h"
 
 #include "Settings/ControllerBindingWidget.h"
@@ -30,6 +24,7 @@
 #include "Settings/ControllerSettingWidgetBinder.h"
 #include "Settings/SettingsWindow.h"
 #include "QtHost.h"
+#include "MainWindow.h"
 #include "QtUtils.h"
 #include "SettingWidgetBinder.h"
 
@@ -478,173 +473,8 @@ void ControllerMacroEditWidget::updateSequenceMode()
 
 void ControllerMacroEditWidget::editFrameSequence()
 {
-	using namespace Pad::FrameSequence;
-	ControllerSettingsWindow* settings = m_bwidget->getDialog();
-	const std::string section = m_bwidget->getConfigSection();
-	const std::string prefix = fmt::format("Macro{}", m_index + 1);
-	QDialog editor(this);
-	editor.setWindowTitle(tr("Player 1 Frame Sequence - Macro %1").arg(m_index + 1));
-	editor.resize(700, 540);
-	QVBoxLayout* layout = new QVBoxLayout(&editor);
-
-	QFormLayout* form = new QFormLayout();
-	QLineEdit* name = new QLineEdit(QString::fromStdString(
-		settings->getStringValue(section.c_str(), (prefix + "SequenceName").c_str(), "")), &editor);
-	name->setMaxLength(64);
-	form->addRow(tr("Combo Name:"), name);
-	QCheckBox* enabled = new QCheckBox(tr("Use this frame sequence instead of the simultaneous-button macro"), &editor);
-	enabled->setChecked(settings->getBoolValue(section.c_str(), (prefix + "SequenceEnabled").c_str(), false));
-	form->addRow(enabled);
-	layout->addLayout(form);
-
-	QLabel* help = new QLabel(tr(
-		"Enter one input state per row. Join simultaneous buttons with &; use Neutral to release everything. "
-		"Durations use emulated frames, not milliseconds. Directions are absolute (Left/Right), not facing-relative. "
-		"Example: Down for 2 frames, Down & Right for 1, Right & Square for 1, Neutral for 5."), &editor);
-	help->setWordWrap(true);
-	layout->addWidget(help);
-
-	QTableWidget* table = new QTableWidget(0, 2, &editor);
-	table->setHorizontalHeaderLabels({tr("Buttons"), tr("Frames")});
-	table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-	table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-	table->setSelectionBehavior(QAbstractItemView::SelectRows);
-	table->setSelectionMode(QAbstractItemView::SingleSelection);
-	layout->addWidget(table, 1);
-	auto add_row = [table](const QString& buttons, int frames) {
-		if (table->rowCount() >= static_cast<int>(MAX_STEPS))
-			return;
-		const int row = table->rowCount();
-		table->insertRow(row);
-		table->setItem(row, 0, new QTableWidgetItem(buttons));
-		QSpinBox* duration = new QSpinBox(table);
-		duration->setRange(1, static_cast<int>(MAX_FRAMES));
-		duration->setValue(frames);
-		duration->setKeyboardTracking(false);
-		table->setCellWidget(row, 1, duration);
-		table->setCurrentCell(row, 0);
-	};
-
-	const std::string stored = settings->getStringValue(section.c_str(), (prefix + "Sequence").c_str(), "");
-	if (auto steps = Parse(stored))
-	{
-		for (const Step& step : steps.value())
-			add_row(QString::fromStdString(FormatButtons(step.buttons)), static_cast<int>(step.frames));
-	}
-	else if (!stored.empty())
-	{
-		QMessageBox::warning(this, tr("Invalid Saved Sequence"),
-			tr("The saved sequence is invalid. Correct it in this editor before enabling playback."));
-		enabled->setChecked(false);
-	}
-
-	QHBoxLayout* tools = new QHBoxLayout();
-	QPushButton* add = new QPushButton(tr("Add Step"), &editor);
-	QPushButton* remove = new QPushButton(tr("Remove"), &editor);
-	QPushButton* up = new QPushButton(tr("Move Up"), &editor);
-	QPushButton* down = new QPushButton(tr("Move Down"), &editor);
-	QPushButton* choose = new QPushButton(tr("Choose Buttons..."), &editor);
-	for (QPushButton* button : {add, remove, up, down, choose})
-		tools->addWidget(button);
-	layout->addLayout(tools);
-	connect(add, &QPushButton::clicked, &editor, [add_row]() { add_row(QStringLiteral("Neutral"), 1); });
-	connect(remove, &QPushButton::clicked, &editor, [table]() {
-		if (table->currentRow() >= 0)
-			table->removeRow(table->currentRow());
-	});
-	auto move_row = [table](int delta) {
-		const int from = table->currentRow();
-		const int to = from + delta;
-		if (from < 0 || to < 0 || to >= table->rowCount())
-			return;
-		const QString text = table->item(from, 0)->text();
-		table->item(from, 0)->setText(table->item(to, 0)->text());
-		table->item(to, 0)->setText(text);
-		QSpinBox* first = qobject_cast<QSpinBox*>(table->cellWidget(from, 1));
-		QSpinBox* second = qobject_cast<QSpinBox*>(table->cellWidget(to, 1));
-		const int value = first->value();
-		first->setValue(second->value());
-		second->setValue(value);
-		table->setCurrentCell(to, 0);
-	};
-	connect(up, &QPushButton::clicked, &editor, [move_row]() { move_row(-1); });
-	connect(down, &QPushButton::clicked, &editor, [move_row]() { move_row(1); });
-	connect(choose, &QPushButton::clicked, &editor, [this, table, &editor]() {
-		const int row = table->currentRow();
-		if (row < 0)
-			return;
-		QDialog picker(&editor);
-		picker.setWindowTitle(tr("Buttons for This Step"));
-		QVBoxLayout* picker_layout = new QVBoxLayout(&picker);
-		QListWidget* buttons = new QListWidget(&picker);
-		const auto current = Parse("1:" + table->item(row, 0)->text().toStdString());
-		for (std::size_t i = 0; i < BUTTON_NAMES.size(); i++)
-		{
-			QListWidgetItem* item = new QListWidgetItem(QString::fromUtf8(BUTTON_NAMES[i].data(),
-				static_cast<qsizetype>(BUTTON_NAMES[i].size())), buttons);
-			item->setCheckState(current.has_value() && (current->front().buttons & (1u << i)) ? Qt::Checked : Qt::Unchecked);
-		}
-		picker_layout->addWidget(buttons);
-		QLabel* hint = new QLabel(tr("Select all buttons to press together. No selections means Neutral."), &picker);
-		hint->setWordWrap(true);
-		picker_layout->addWidget(hint);
-		QDialogButtonBox* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &picker);
-		picker_layout->addWidget(box);
-		connect(box, &QDialogButtonBox::accepted, &picker, &QDialog::accept);
-		connect(box, &QDialogButtonBox::rejected, &picker, &QDialog::reject);
-		if (picker.exec() == QDialog::Accepted)
-		{
-			std::uint16_t mask = 0;
-			for (int i = 0; i < buttons->count(); i++)
-			{
-				if (buttons->item(i)->checkState() == Qt::Checked)
-					mask |= static_cast<std::uint16_t>(1u << i);
-			}
-			table->item(row, 0)->setText(QString::fromStdString(FormatButtons(mask)));
-		}
-	});
-
-	QLabel* behavior = new QLabel(tr(
-		"Bind a key or digital button in the macro panel. Press once to play; press again to cancel. "
-		"Player 1 live inputs are overridden until the sequence finishes. Playback pauses with emulation. "
-		"Hardcore Mode and input recording/playback are not supported. Maximum: 256 steps / 36,000 total frames."), &editor);
-	behavior->setWordWrap(true);
-	layout->addWidget(behavior);
-
-	QDialogButtonBox* box = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &editor);
-	layout->addWidget(box);
-	connect(box, &QDialogButtonBox::rejected, &editor, &QDialog::reject);
-	connect(box, &QDialogButtonBox::accepted, &editor, [this, table, name, enabled, settings, section, prefix, &editor]() {
-		std::string text;
-		for (int row = 0; row < table->rowCount(); row++)
-		{
-			if (!text.empty())
-				text.push_back(';');
-			QString buttons = table->item(row, 0)->text().trimmed();
-			if (buttons.isEmpty())
-				buttons = QStringLiteral("Neutral");
-			text.append(std::to_string(qobject_cast<QSpinBox*>(table->cellWidget(row, 1))->value()));
-			text.append(":").append(buttons.toStdString());
-		}
-		const auto parsed = Parse(text);
-		if ((!text.empty() || enabled->isChecked()) &&
-			(!parsed.has_value() || parsed->size() != static_cast<std::size_t>(table->rowCount())))
-		{
-			QMessageBox::warning(&editor, tr("Invalid Sequence"), tr(
-				"Use the button picker or canonical button names joined with &: Up, Right, Down, Left, "
-				"Triangle, Circle, Cross, Square, Select, Start, L1, L2, R1, R2, L3, R3, or Neutral. "
-				"An enabled sequence needs at least one step and at most 36,000 total frames."));
-			return;
-		}
-		const std::string canonical = parsed.has_value() ? Serialize(parsed.value()) : std::string();
-		settings->setStringValue(section.c_str(), (prefix + "SequenceName").c_str(), name->text().trimmed().toUtf8().constData());
-		settings->setStringValue(section.c_str(), (prefix + "Sequence").c_str(), canonical.c_str());
-		settings->setBoolValue(section.c_str(), (prefix + "SequenceEnabled").c_str(), enabled->isChecked());
-		updateSequenceMode();
-		m_parent->updateListItem(m_index);
-		editor.accept();
-	});
-	editor.exec();
+	if (g_main_window)
+		g_main_window->showFrameSequenceEditor(static_cast<int>(m_index));
 }
 
 void ControllerMacroEditWidget::onPressureChanged()

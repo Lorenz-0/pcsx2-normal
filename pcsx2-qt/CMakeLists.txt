@@ -269,6 +269,8 @@ target_sources(pcsx2-qt PRIVATE
 	Tools/InputRecording/NewInputRecordingDlg.cpp
 	Tools/InputRecording/NewInputRecordingDlg.h
 	Tools/InputRecording/NewInputRecordingDlg.ui
+	Tools/FrameSequenceWindow.cpp
+	Tools/FrameSequenceWindow.h
 	Tools/InputRecording/InputRecordingViewer.cpp
 	Tools/InputRecording/InputRecordingViewer.h
 	Tools/InputRecording/InputRecordingViewer.ui

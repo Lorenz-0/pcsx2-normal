@@ -626,23 +626,40 @@ void Pad::SetInputSequenceTrigger(u32 index, s32 pressed)
 	if (pressed == 0 || index >= s_sequences.size() || s_sequences[index].empty() || !VMManager::HasValidVM())
 		return;
 
+	// Pressing the same trigger again cancels. A different sequence replaces the old one.
+	if (s_sequence_slot == index)
+		CancelInputSequence();
+	else if (StartInputSequence(s_sequences[index]))
+		s_sequence_slot = index;
+}
+
+bool Pad::StartInputSequence(std::span<const FrameSequence::Step> steps)
+{
+	PadBase* pad = GetPad(0);
+	if (!VMManager::HasValidVM() || !pad || pad->GetType() != ControllerType::DualShock2)
+		return false;
 	if (Achievements::IsHardcoreModeActive() || g_InputRecording.isActive())
 	{
 		Host::AddOSDMessage(TRANSLATE_STR("Pad", "Input sequences are unavailable during Hardcore Mode or input recording/playback."),
 			Host::OSD_WARNING_DURATION);
-		return;
+		return false;
 	}
 
-	// Pressing the same trigger again cancels. A different sequence replaces the old one.
-	const bool cancel_only = (s_sequence_slot == index);
+	FrameSequence::Player next;
+	next.Start(steps);
+	if (!next.IsActive())
+		return false;
 	CancelInputSequence();
-	if (!cancel_only)
-	{
-		s_sequence_player.Start(s_sequences[index]);
-		s_sequence_slot = index;
-		// Arm frame one immediately, including while paused. Only VSync consumes later frames.
-		UpdateInputSequence();
-	}
+	s_sequence_player = std::move(next);
+	// Arm frame one immediately, including while paused. Only VSync consumes later frames.
+	UpdateInputSequence();
+	return true;
+}
+
+Pad::InputSequenceStatus Pad::GetInputSequenceStatus()
+{
+	return {s_sequence_player.IsActive(), s_sequence_player.GetPosition(), s_sequence_player.GetTotalFrames(),
+		s_sequence_slot.has_value() ? static_cast<int>(s_sequence_slot.value()) : -1};
 }
 
 void Pad::UpdateInputSequence()

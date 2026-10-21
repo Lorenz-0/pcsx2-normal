@@ -111,6 +111,7 @@
     <ClCompile Include="SetupWizardDialog.cpp" />
     <ClCompile Include="Themes.cpp" />
     <ClCompile Include="ToolbarCustomizationDialog.cpp" />
+    <ClCompile Include="Tools\FrameSequenceWindow.cpp" />
     <ClCompile Include="Tools\InputRecording\InputRecordingViewer.cpp" />
     <ClCompile Include="Tools\InputRecording\NewInputRecordingDlg.cpp" />
     <ClCompile Include="Debugger\AnalysisOptionsDialog.cpp" />
@@ -236,6 +237,7 @@
     <QtMoc Include="GameList\GameListWidget.h" />
     <QtMoc Include="GameList\GameListRefreshThread.h" />
     <QtMoc Include="Tools\InputRecording\NewInputRecordingDlg.h" />
+    <QtMoc Include="Tools\FrameSequenceWindow.h" />
     <QtMoc Include="Tools\InputRecording\InputRecordingViewer.h" />
     <ClInclude Include="QtUtils.h" />
     <QtMoc Include="Debugger\AnalysisOptionsDialog.h" />

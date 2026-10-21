@@ -126,10 +126,46 @@ namespace Pad::FrameSequence
 		return result;
 	}
 
+	// The editor presents individual frames; the runtime/settings retain run-length encoded steps.
+	inline std::optional<std::vector<std::uint16_t>> Expand(std::span<const Step> steps)
+	{
+		if (steps.empty() || steps.size() > MAX_STEPS)
+			return std::nullopt;
+		std::vector<std::uint16_t> frames;
+		for (const Step& step : steps)
+		{
+			if (step.frames == 0 || step.frames > MAX_FRAMES - frames.size())
+				return std::nullopt;
+			frames.insert(frames.end(), step.frames, step.buttons);
+		}
+		return frames;
+	}
+
+	inline std::optional<std::vector<Step>> Compress(std::span<const std::uint16_t> frames)
+	{
+		if (frames.empty() || frames.size() > MAX_FRAMES)
+			return std::nullopt;
+		std::vector<Step> steps;
+		for (const auto buttons : frames)
+		{
+			if (!steps.empty() && steps.back().buttons == buttons)
+				steps.back().frames++;
+			else
+			{
+				if (steps.size() == MAX_STEPS)
+					return std::nullopt;
+				steps.push_back({buttons, 1});
+			}
+		}
+		return steps;
+	}
+
 	class Player
 	{
 	public:
 		bool IsActive() const { return !m_steps.empty(); }
+		std::uint32_t GetPosition() const { return m_position; }
+		std::uint32_t GetTotalFrames() const { return m_total; }
 
 		void Start(std::span<const Step> steps)
 		{
@@ -144,6 +180,7 @@ namespace Pad::FrameSequence
 				total += step.frames;
 			}
 			m_steps.assign(steps.begin(), steps.end());
+			m_total = total;
 			m_index = 0;
 			m_remaining = 0;
 		}
@@ -151,6 +188,8 @@ namespace Pad::FrameSequence
 		void Cancel()
 		{
 			m_steps.clear();
+			m_position = 0;
+			m_total = 0;
 			m_index = 0;
 			m_remaining = 0;
 		}
@@ -171,6 +210,7 @@ namespace Pad::FrameSequence
 				m_remaining = m_steps[m_index++].frames;
 			}
 			m_remaining--;
+			m_position++;
 			return m_steps[m_index - 1].buttons;
 		}
 
@@ -178,5 +218,7 @@ namespace Pad::FrameSequence
 		std::vector<Step> m_steps;
 		std::size_t m_index = 0;
 		std::uint32_t m_remaining = 0;
+		std::uint32_t m_position = 0;
+		std::uint32_t m_total = 0;
 	};
 } // namespace Pad::FrameSequence

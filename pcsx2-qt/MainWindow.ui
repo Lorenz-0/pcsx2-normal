@@ -210,6 +210,7 @@
     <addaction name="actionEditPatches"/>
     <addaction name="actionReloadPatches"/>
     <addaction name="separator"/>
+    <addaction name="actionInputTimeline"/>
     <addaction name="menuInputRecording"/>
     <addaction name="separator"/>
     <addaction name="actionEnableSystemConsole"/>
@@ -954,6 +955,14 @@
    </property>
    <property name="text">
     <string>Save Single Frame &amp;GS Dump</string>
+   </property>
+  </action>
+  <action name="actionInputTimeline">
+   <property name="text">
+    <string>Player 1 Input Timeline...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Alt+M</string>
    </property>
   </action>
   <action name="actionInputRecNew">
