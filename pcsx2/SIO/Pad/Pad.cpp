@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "Achievements.h"
+#include "Counters.h"
 #include "Host.h"
 #include "Recording/InputRecording.h"
 #include "SIO/Pad/FrameSequence.h"
@@ -675,9 +676,14 @@ void Pad::UpdateInputSequence()
 		return;
 	}
 
-	const auto buttons = s_sequence_player.NextFrame();
+	const auto buttons = s_sequence_player.NextFrame(g_FrameCount);
 	if (!buttons.has_value())
 	{
+		if (s_sequence_player.HasTimingError())
+		{
+			Host::AddOSDMessage(TRANSLATE_STR("Pad", "Input sequence stopped: emulated-frame synchronization was lost. Restart the combo from a known game state."),
+				Host::OSD_WARNING_DURATION);
+		}
 		s_sequence_slot.reset();
 		RestoreSequenceLiveInputs();
 		return;
@@ -726,8 +732,8 @@ void Pad::ResetAllControllerInputs()
 
 bool Pad::Freeze(StateWrapper& sw)
 {
-	const bool restore_live_inputs = sw.IsReading() && std::any_of(s_sequences.begin(), s_sequences.end(),
-		[](const auto& sequence) { return !sequence.empty(); });
+	const bool restore_live_inputs = sw.IsReading() && (s_sequence_player.IsActive() ||
+														   std::any_of(s_sequences.begin(), s_sequences.end(), [](const auto& sequence) { return !sequence.empty(); }));
 	if (sw.IsReading())
 	{
 		CancelInputSequence();

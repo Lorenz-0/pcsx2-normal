@@ -320,3 +320,103 @@ TEST(FrameSequence, SeparatelyInsertedRowsDoNotMergeWithEachOther)
 	EXPECT_EQ(BuildFrameRanges(frames, true).size(), 1u);
 	EXPECT_EQ(BuildFrameRanges(frames, true, std::span(isolated).first(2)).size(), 1u);
 }
+
+TEST(FrameSequence, DuplicateFrameUpdatesCannotEatAOneFramePress)
+{
+	Player player;
+	player.Start(Parse("1:Square;1:Neutral").value());
+	for (int update = 0; update < 10000; update++)
+	{
+		EXPECT_EQ(player.NextFrame(50), 128u);
+		EXPECT_EQ(player.GetPosition(), 1u);
+	}
+	for (int update = 0; update < 10000; update++)
+	{
+		EXPECT_EQ(player.NextFrame(51), 0u);
+		EXPECT_EQ(player.GetPosition(), 2u);
+	}
+	EXPECT_FALSE(player.NextFrame(52).has_value());
+	EXPECT_FALSE(player.HasTimingError());
+}
+
+TEST(FrameSequence, VariableHostWorkAndStallsDoNotChangeTheFrameTrace)
+{
+	const auto frames = Expand(Parse("2:Down;1:Down & Right;1:Right & Square;5:Neutral").value()).value();
+	Player reference, stalled;
+	const auto steps = Compress(frames).value();
+	reference.Start(steps);
+	stalled.Start(steps);
+	// Irregular numbers of same-frame updates stand in for variable host work,
+	// repeated polls and a long stall. Only an emulated counter change advances.
+	const std::array<int, 9> repeats = {1, 500, 3, 10000, 2, 3000, 17, 1, 999};
+	for (std::uint32_t frame = 0; frame < frames.size(); frame++)
+	{
+		EXPECT_EQ(reference.NextFrame(100 + frame), frames[frame]);
+		for (int poll = 0; poll < repeats[frame]; poll++)
+		{
+			EXPECT_EQ(stalled.NextFrame(100 + frame), frames[frame]);
+			EXPECT_EQ(stalled.GetPosition(), frame + 1);
+		}
+	}
+	EXPECT_FALSE(reference.NextFrame(109).has_value());
+	EXPECT_FALSE(stalled.NextFrame(109).has_value());
+	EXPECT_FALSE(stalled.HasTimingError());
+}
+
+TEST(FrameSequence, CounterWrapIsAValidSingleFrameAdvance)
+{
+	Player player;
+	player.Start(Parse("1:Down;1:Square;1:Neutral").value());
+	EXPECT_EQ(player.NextFrame(UINT32_MAX - 1), 4u);
+	EXPECT_EQ(player.NextFrame(UINT32_MAX), 128u);
+	EXPECT_EQ(player.NextFrame(UINT32_MAX), 128u);
+	EXPECT_EQ(player.NextFrame(0), 0u);
+	EXPECT_FALSE(player.NextFrame(1).has_value());
+	EXPECT_FALSE(player.HasTimingError());
+}
+
+TEST(FrameSequence, ActualCounterDiscontinuitiesStopInsteadOfSkippingOrCatchingUp)
+{
+	for (const std::uint32_t discontinuity : {42u, 39u, 10000u})
+	{
+		Player player;
+		player.Start(Parse("10:Square;1:Neutral").value());
+		ASSERT_EQ(player.NextFrame(40), 128u);
+		EXPECT_FALSE(player.NextFrame(discontinuity).has_value());
+		EXPECT_FALSE(player.IsActive());
+		EXPECT_TRUE(player.HasTimingError());
+		EXPECT_EQ(player.GetPosition(), 0u);
+		EXPECT_FALSE(player.NextFrame(discontinuity).has_value());
+	}
+}
+
+TEST(FrameSequence, RestartAndCancelClearTheFrameLatchAndTimingFault)
+{
+	Player player;
+	player.Start(Parse("1:Down").value());
+	EXPECT_EQ(player.NextFrame(0), 4u);
+	player.Start(Parse("1:Square").value());
+	EXPECT_EQ(player.NextFrame(0), 128u);
+	EXPECT_FALSE(player.NextFrame(2).has_value());
+	ASSERT_TRUE(player.HasTimingError());
+	player.Start(Parse("1:Neutral").value());
+	EXPECT_FALSE(player.HasTimingError());
+	EXPECT_EQ(player.NextFrame(2), 0u);
+	player.Cancel();
+	EXPECT_FALSE(player.NextFrame(2).has_value());
+	EXPECT_FALSE(player.HasTimingError());
+}
+
+TEST(FrameSequence, MaximumLengthHoldStillConsumesOneInputPerEmulatedFrame)
+{
+	Player player;
+	player.Start(Parse("36000:Square").value());
+	for (std::uint32_t frame = 0; frame < MAX_FRAMES; frame++)
+	{
+		EXPECT_EQ(player.NextFrame(frame), 128u);
+		EXPECT_EQ(player.NextFrame(frame), 128u);
+		EXPECT_EQ(player.GetPosition(), frame + 1);
+	}
+	EXPECT_FALSE(player.NextFrame(MAX_FRAMES).has_value());
+	EXPECT_FALSE(player.HasTimingError());
+}

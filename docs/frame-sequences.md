@@ -94,6 +94,15 @@ of that profile. Saving reloads settings and therefore stops current playback.
 - Timing uses emulated VSync boundaries, never elapsed wall-clock time. The first
   input is armed immediately, including while paused. Frame Advance hold/repeat
   delays do not change the stored input durations.
+- Small FPS dips, rendering hitches, slow motion, turbo and host stalls do not
+  rescale the stored durations. A 4-frame hold still lasts 4 **emulated** frames;
+  its real-time duration can grow during slowdown. No FPS sampling or wall-clock
+  catch-up is used, and repeated updates for the same emulated counter cannot
+  consume another input.
+- If the emulated counter actually skips or moves backward during playback,
+  the sequence stops, restores live input and shows a synchronization warning.
+  Normal counter wraparound is supported. This is a safety stop, not automatic
+  combo recovery: restart from a known game state rather than sending late inputs.
 - Player 1 live input is suppressed during playback; its latest state is restored
   on completion or cancellation. **Player 2 is not overridden.**
 - Loading a state, resetting/stopping a game, reloading bindings/settings, clearing
@@ -108,3 +117,9 @@ of that profile. Saving reloads settings and therefore stops current playback.
 These are PCSX2 VSync frames, not necessarily the game's animation frames. A
 30 FPS game may sample inputs differently from a 60 FPS game. Combo success still
 depends on game state, orientation, hit-stop and input windows.
+
+Host slowdown is different from lag **inside the game**. If the game skips an
+input poll, runs its logic less often than VSync, or enters hit-stop, a frame-based
+sequence cannot infer the intended animation/combo window. It preserves the
+specified emulated-frame inputs; it does not guarantee every game will recognize
+every one-frame press.

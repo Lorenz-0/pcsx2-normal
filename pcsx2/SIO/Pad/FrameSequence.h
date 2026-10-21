@@ -208,6 +208,7 @@ namespace Pad::FrameSequence
 		bool IsActive() const { return !m_steps.empty(); }
 		std::uint32_t GetPosition() const { return m_position; }
 		std::uint32_t GetTotalFrames() const { return m_total; }
+		bool HasTimingError() const { return m_timing_error; }
 
 		void Start(std::span<const Step> steps)
 		{
@@ -234,6 +235,36 @@ namespace Pad::FrameSequence
 			m_total = 0;
 			m_index = 0;
 			m_remaining = 0;
+			m_emulated_frame.reset();
+			m_frame_buttons.reset();
+			m_timing_error = false;
+		}
+
+		// CPU-thread playback uses the emulated counter, not host FPS or a timer.
+		// Duplicate calls reassert the same input; a true counter discontinuity must
+		// stop playback rather than skip inputs or silently shift the remaining combo.
+		std::optional<std::uint16_t> NextFrame(std::uint32_t emulated_frame)
+		{
+			if (!IsActive())
+				return std::nullopt;
+			if (m_emulated_frame.has_value())
+			{
+				if (emulated_frame == m_emulated_frame.value())
+					return m_frame_buttons;
+				if (emulated_frame != static_cast<std::uint32_t>(m_emulated_frame.value() + 1u))
+				{
+					Cancel();
+					m_timing_error = true;
+					return std::nullopt;
+				}
+			}
+			const auto buttons = NextFrame();
+			if (buttons.has_value())
+			{
+				m_emulated_frame = emulated_frame;
+				m_frame_buttons = buttons;
+			}
+			return buttons;
 		}
 
 		// Called exactly once at the emulated frame input boundary, never from idle polling.
@@ -262,5 +293,8 @@ namespace Pad::FrameSequence
 		std::uint32_t m_remaining = 0;
 		std::uint32_t m_position = 0;
 		std::uint32_t m_total = 0;
+		std::optional<std::uint32_t> m_emulated_frame;
+		std::optional<std::uint16_t> m_frame_buttons;
+		bool m_timing_error = false;
 	};
 } // namespace Pad::FrameSequence

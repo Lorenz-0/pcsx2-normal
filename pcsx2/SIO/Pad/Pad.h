@@ -90,6 +90,7 @@ namespace Pad
 		int macro_slot; // -1 for direct editor playback.
 	};
 	InputSequenceStatus GetInputSequenceStatus();
-	// Called once per emulated input frame, not during paused/idle input polling.
+	// Called at each emulated VSync. Repeated updates for the same counter only reassert
+	// the prepared input; host/render timing must never consume sequence frames.
 	void UpdateInputSequence();
 }; // namespace Pad
