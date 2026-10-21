@@ -1333,7 +1333,7 @@ void MainWindow::updateWindowTitle()
 {
 	QString suffix(QtHost::GetAppConfigSuffix());
 	QString main_title(QtHost::GetAppNameAndVersion() + suffix);
-	QString display_title(s_current_title + suffix);
+	QString display_title(s_current_title + QStringLiteral(" - ") + QtHost::GetAppName() + suffix);
 
 	if (!s_vm_valid || s_current_title.isEmpty())
 		display_title = main_title;

@@ -161,6 +161,7 @@ void SetupWizardDialog::confirmCancel()
 void SetupWizardDialog::setupUi()
 {
 	m_ui.setupUi(this);
+	setWindowTitle(tr("%1 Setup Wizard").arg(QtHost::GetAppName()));
 
 	m_ui.logo->setPixmap(QPixmap(QStringLiteral("%1/icons/AppIconLarge.png").arg(QtHost::GetResourcesBasePath())));
 
@@ -219,6 +220,7 @@ void SetupWizardDialog::languageChanged()
 	// Skip the recreation, since we don't have many dynamic UI elements.
 	QtHost::InstallTranslator(this);
 	m_ui.retranslateUi(this);
+	setWindowTitle(tr("%1 Setup Wizard").arg(QtHost::GetAppName()));
 }
 
 void SetupWizardDialog::setupBIOSPage()

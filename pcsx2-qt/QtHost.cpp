@@ -1550,9 +1550,14 @@ bool Host::RequestResetSettings(bool folders, bool core, bool controllers, bool 
 	return true;
 }
 
+QString QtHost::GetAppName()
+{
+	return QStringLiteral("PCSX2 - Alb0ss_ Edition");
+}
+
 QString QtHost::GetAppNameAndVersion()
 {
-	return QString("PCSX2 %1").arg(BuildVersion::GitRev);
+	return GetAppName() + QStringLiteral(" ") + QString::fromUtf8(BuildVersion::GitRev);
 }
 
 QString QtHost::GetAppConfigSuffix()
@@ -2497,6 +2502,7 @@ int main(int argc, char* argv[])
 	QtHost::RegisterTypes();
 
 	PCSX2MainApplication app(argc, argv);
+	app.setApplicationDisplayName(QtHost::GetAppName());
 
 	QtHost::InitializeClipboard();
 

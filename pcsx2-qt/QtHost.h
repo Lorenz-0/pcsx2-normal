@@ -258,7 +258,10 @@ namespace QtHost
 	/// Call when the language changes.
 	void InstallTranslator(QWidget* dialog_parent);
 
-	/// Returns the application name and version, optionally including debug/devel config indicator.
+	/// Returns the personal build's visible name without changing settings/resource identifiers.
+	QString GetAppName();
+
+	/// Returns the application name and version.
 	QString GetAppNameAndVersion();
 
 	/// Returns the debug/devel config indicator.

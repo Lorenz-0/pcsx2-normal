@@ -38,6 +38,7 @@ AboutDialog::AboutDialog(QWidget* parent)
 	: QDialog(parent)
 {
 	m_ui.setupUi(this);
+	setWindowTitle(tr("About %1").arg(QtHost::GetAppName()));
 
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 	setFixedSize(geometry().width(), geometry().height());
