@@ -2313,6 +2313,9 @@
     <ClInclude Include="SIO\Pad\PadBase.h">
       <Filter>System\Ps2\Iop\SIO\PAD</Filter>
     </ClInclude>
+    <ClInclude Include="SIO\Pad\FrameSequence.h">
+      <Filter>System\Ps2\Iop\SIO\PAD</Filter>
+    </ClInclude>
     <ClInclude Include="SIO\Pad\PadDualshock2.h">
       <Filter>System\Ps2\Iop\SIO\PAD</Filter>
     </ClInclude>

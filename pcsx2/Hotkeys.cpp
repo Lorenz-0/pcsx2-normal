@@ -8,6 +8,7 @@
 #include "ImGui/FullscreenUI.h"
 #include "ImGui/ImGuiOverlays.h"
 #include "Input/InputManager.h"
+#include "SIO/Pad/Pad.h"
 #include "Recording/InputRecording.h"
 #include "SPU2/spu2.h"
 #include "VMManager.h"
@@ -229,6 +230,11 @@ DEFINE_HOTKEY(
 			}
 			VMManager::FrameAdvance(1);
 		}
+	})
+DEFINE_HOTKEY("CancelInputSequence", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Stop Input Sequence"),
+	[](s32 pressed) {
+		if (pressed > 0)
+			Pad::CancelInputSequence();
 	})
 DEFINE_HOTKEY("ToggleFrameLimit", TRANSLATE_NOOP("Hotkeys", "Speed"), TRANSLATE_NOOP("Hotkeys", "Toggle Frame Limit"),
 	[](s32 pressed) {

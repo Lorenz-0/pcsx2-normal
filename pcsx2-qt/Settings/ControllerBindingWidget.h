@@ -114,6 +114,8 @@ private:
 	void modFrequency(s32 delta);
 	void updateFrequency();
 	void updateFrequencyText();
+	void editFrameSequence();
+	void updateSequenceMode();
 
 	Ui::ControllerMacroEditWidget m_ui;
 

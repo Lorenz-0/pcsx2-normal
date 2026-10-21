@@ -1,5 +1,6 @@
 add_pcsx2_test(core_test
 	frame_advance_settings_tests.cpp
+	frame_sequence_tests.cpp
 	patch_tests.cpp
 	MockMemoryInterface.h
 	StubHost.cpp

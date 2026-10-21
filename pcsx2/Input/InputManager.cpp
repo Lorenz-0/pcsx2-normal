@@ -955,6 +955,15 @@ void InputManager::AddPadBindings(SettingsInterface& si, u32 pad_index, bool is_
 		const std::vector<std::string> bindings(si.GetStringList(section.c_str(), fmt::format("Macro{}", macro_button_index + 1).c_str()));
 		if (!bindings.empty())
 		{
+			if (pad_index == 0 && type == Pad::ControllerType::DualShock2 &&
+				si.GetBoolValue(section.c_str(), fmt::format("Macro{}SequenceEnabled", macro_button_index + 1).c_str(), false))
+			{
+				AddBindings(bindings, InputButtonEventHandler{[macro_button_index](s32 pressed) {
+					Pad::SetInputSequenceTrigger(macro_button_index, pressed);
+				}}, InputBindingInfo::Type::Macro, si, section.c_str(),
+					fmt::format("Macro{}", macro_button_index + 1).c_str(), is_profile);
+				continue;
+			}
 			const float deadzone = si.GetFloatValue(section.c_str(), fmt::format("Macro{}Deadzone", macro_button_index + 1).c_str(), 0.0f);
 			AddBindings(
 				bindings, InputAxisEventHandler{[pad_index, macro_button_index, deadzone](InputBindingKey key, float value) {
@@ -1230,6 +1239,7 @@ bool InputManager::ProcessEvent(InputBindingKey key, float value, bool skip_butt
 
 void InputManager::ClearBindStateFromSource(InputBindingKey key)
 {
+	Pad::CancelInputSequence();
 	// Why are we doing it this way? Because any of the bindings could cause a reload and invalidate our iterators :(.
 	// Axis handlers should be fine, so we'll do those as a first pass.
 	for (const auto& [match_key, binding] : s_binding_map)
@@ -1448,6 +1458,7 @@ void InputManager::OnInputDeviceConnected(const std::string_view identifier, con
 
 void InputManager::OnInputDeviceDisconnected(const InputBindingKey key, const std::string_view identifier)
 {
+	Pad::CancelInputSequence();
 	if (VMManager::HasValidVM())
 		USB::InputDeviceDisconnected(identifier);
 
@@ -1625,6 +1636,7 @@ void InputManager::ReloadBindings(SettingsInterface& si, SettingsInterface& bind
 	std::unique_lock lock(s_binding_map_write_lock);
 
 	VMManager::Internal::ResetFrameAdvanceHotkeyState();
+	Pad::CancelInputSequence();
 	s_binding_map.clear();
 	s_pad_vibration_array.clear();
 	s_keyboard_event_callbacks.clear();

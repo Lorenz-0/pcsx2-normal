@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team
 // SPDX-License-Identifier: GPL-3.0+
 
+#include "Achievements.h"
 #include "Host.h"
+#include "Recording/InputRecording.h"
+#include "SIO/Pad/FrameSequence.h"
 #include "Input/InputManager.h"
 #include "SIO/Pad/Pad.h"
 #include "SIO/Pad/PadDualshock2.h"
@@ -26,6 +29,7 @@
 
 #include "fmt/format.h"
 
+#include <algorithm>
 #include <vector>
 
 //Map of actively pressed keys so that chords work
@@ -56,6 +60,14 @@ namespace Pad
 	static std::array<std::array<MacroButton, NUM_MACRO_BUTTONS_PER_CONTROLLER>, NUM_CONTROLLER_PORTS> s_macro_buttons;
 	static std::array<std::unique_ptr<PadBase>, NUM_CONTROLLER_PORTS> s_controllers;
 
+	static std::array<std::vector<FrameSequence::Step>, NUM_MACRO_BUTTONS_PER_CONTROLLER> s_sequences;
+	static FrameSequence::Player s_sequence_player;
+	static std::optional<u32> s_sequence_slot;
+	// Keep live events even during an override, so held/released buttons restore correctly.
+	static std::array<float, PadDualshock2::Inputs::LENGTH> s_sequence_live_inputs = {};
+	static void RestoreSequenceLiveInputs();
+	static_assert(PadDualshock2::Inputs::PAD_R3 + 1 == FrameSequence::BUTTON_NAMES.size());
+
 	bool mtapPort0LastState;
 	bool mtapPort1LastState;
 } // namespace Pad
@@ -67,6 +79,8 @@ bool Pad::Initialize()
 
 void Pad::Shutdown()
 {
+	CancelInputSequence();
+	s_sequence_live_inputs = {};
 	for (auto& port : s_controllers)
 		port.reset();
 }
@@ -89,6 +103,8 @@ std::optional<u32> Pad::ControllerInfo::GetBindIndex(const std::string_view name
 
 void Pad::LoadConfig(const SettingsInterface& si)
 {
+	CancelInputSequence();
+	s_sequences = {};
 	s_macro_buttons = {};
 
 	const bool mtapPort0Changed = EmuConfig.Pad.MultitapPort0_Enabled != Pad::mtapPort0LastState;
@@ -117,6 +133,9 @@ void Pad::LoadConfig(const SettingsInterface& si)
 				// there was some kind of pad ejection event and properly detect the new one, and properly initiate its config sequence.
 				pad = Pad::CreatePad(i, ci->type, (VMManager::GetState() != VMState::Shutdown ? Pad::DEFAULT_EJECT_TICKS : 0));
 			}
+
+			if (i == 0)
+				s_sequence_live_inputs = {};
 
 			pxAssert(pad);
 		}
@@ -377,6 +396,12 @@ void Pad::CopyConfiguration(SettingsInterface* dest_si, const SettingsInterface&
 				dest_si->CopyStringValue(src_si, section.c_str(), TinyString::from_format("Macro{}Binds", i + 1));
 				dest_si->CopyUIntValue(src_si, section.c_str(), TinyString::from_format("Macro{}Frequency", i + 1));
 				dest_si->CopyBoolValue(src_si, section.c_str(), TinyString::from_format("Macro{}Toggle", i + 1));
+				if (port == 0)
+				{
+					dest_si->CopyBoolValue(src_si, section.c_str(), TinyString::from_format("Macro{}SequenceEnabled", i + 1));
+					dest_si->CopyStringValue(src_si, section.c_str(), TinyString::from_format("Macro{}Sequence", i + 1));
+					dest_si->CopyStringValue(src_si, section.c_str(), TinyString::from_format("Macro{}SequenceName", i + 1));
+				}
 			}
 		}
 
@@ -555,11 +580,109 @@ void Pad::SetControllerState(u32 controller, u32 bind, float value)
 	if (controller >= NUM_CONTROLLER_PORTS)
 		return;
 
-	s_controllers[controller]->Set(bind, value);
+	if (controller == 0 && bind < s_sequence_live_inputs.size())
+	{
+		s_sequence_live_inputs[bind] = value;
+		if (s_sequence_player.IsActive())
+			return;
+	}
+	if (s_controllers[controller])
+		s_controllers[controller]->Set(bind, value);
+}
+
+static void Pad::RestoreSequenceLiveInputs()
+{
+	PadBase* pad = GetPad(0);
+	if (!pad || pad->GetType() != ControllerType::DualShock2)
+		return;
+
+	// Restore the pressure modifier before recomputing digital pressures. Analog mode is a
+	// toggle event, not a held game input: replaying it here could flip the controller mode.
+	pad->Set(PadDualshock2::Inputs::PAD_PRESSURE, s_sequence_live_inputs[PadDualshock2::Inputs::PAD_PRESSURE]);
+	for (u32 bind = 0; bind < s_sequence_live_inputs.size(); bind++)
+	{
+		if (bind != PadDualshock2::Inputs::PAD_ANALOG && bind != PadDualshock2::Inputs::PAD_PRESSURE)
+			pad->Set(bind, s_sequence_live_inputs[bind]);
+	}
+}
+
+void Pad::CancelInputSequence()
+{
+	const bool was_active = s_sequence_player.IsActive();
+	s_sequence_player.Cancel();
+	s_sequence_slot.reset();
+	if (was_active)
+		RestoreSequenceLiveInputs();
+}
+
+void Pad::SetInputSequenceTrigger(u32 index, s32 pressed)
+{
+	if (pressed < 0)
+	{
+		if (s_sequence_slot == index)
+			CancelInputSequence();
+		return;
+	}
+	if (pressed == 0 || index >= s_sequences.size() || s_sequences[index].empty() || !VMManager::HasValidVM())
+		return;
+
+	if (Achievements::IsHardcoreModeActive() || g_InputRecording.isActive())
+	{
+		Host::AddOSDMessage(TRANSLATE_STR("Pad", "Input sequences are unavailable during Hardcore Mode or input recording/playback."),
+			Host::OSD_WARNING_DURATION);
+		return;
+	}
+
+	// Pressing the same trigger again cancels. A different sequence replaces the old one.
+	const bool cancel_only = (s_sequence_slot == index);
+	CancelInputSequence();
+	if (!cancel_only)
+	{
+		s_sequence_player.Start(s_sequences[index]);
+		s_sequence_slot = index;
+		// Arm frame one immediately, including while paused. Only VSync consumes later frames.
+		UpdateInputSequence();
+	}
+}
+
+void Pad::UpdateInputSequence()
+{
+	if (!s_sequence_player.IsActive())
+		return;
+
+	PadBase* pad = GetPad(0);
+	if (!pad || pad->GetType() != ControllerType::DualShock2 ||
+		Achievements::IsHardcoreModeActive() || g_InputRecording.isActive())
+	{
+		CancelInputSequence();
+		return;
+	}
+
+	const auto buttons = s_sequence_player.NextFrame();
+	if (!buttons.has_value())
+	{
+		s_sequence_slot.reset();
+		RestoreSequenceLiveInputs();
+		return;
+	}
+
+	// Override the complete digital state and neutralize both sticks. Real inputs remain shadowed.
+	pad->SetRawAnalogs({ANALOG_NEUTRAL_POSITION, ANALOG_NEUTRAL_POSITION},
+		{ANALOG_NEUTRAL_POSITION, ANALOG_NEUTRAL_POSITION});
+	for (u32 bind = 0; bind < FrameSequence::BUTTON_NAMES.size(); bind++)
+	{
+		const bool down = (buttons.value() & (1u << bind)) != 0;
+		pad->SetRawPressureButton(bind, {down, down ? 255 : 0});
+	}
 }
 
 void Pad::ResetControllerInputs(u32 controller)
 {
+	if (controller == 0)
+	{
+		CancelInputSequence();
+		s_sequence_live_inputs = {};
+	}
 	if (controller >= NUM_CONTROLLER_PORTS || !HasConnectedPad(controller))
 		return;
 
@@ -586,8 +709,11 @@ void Pad::ResetAllControllerInputs()
 
 bool Pad::Freeze(StateWrapper& sw)
 {
+	const bool restore_live_inputs = sw.IsReading() && std::any_of(s_sequences.begin(), s_sequences.end(),
+		[](const auto& sequence) { return !sequence.empty(); });
 	if (sw.IsReading())
 	{
+		CancelInputSequence();
 		if (!sw.DoMarker("PAD"))
 		{
 			Console.Error("PAD state is invalid! Leaving the current state in place.");
@@ -665,6 +791,10 @@ bool Pad::Freeze(StateWrapper& sw)
 		}
 	}
 
+	// Host inputs must not rewind to a pressed combo state stored in a savestate.
+	if (restore_live_inputs)
+		RestoreSequenceLiveInputs();
+
 	return !sw.HasError();
 }
 
@@ -673,6 +803,17 @@ void Pad::LoadMacroButtonConfig(const SettingsInterface& si, u32 pad, const Cont
 {
 	for (u32 i = 0; i < NUM_MACRO_BUTTONS_PER_CONTROLLER; i++)
 	{
+		if (pad == 0 && ci->type == ControllerType::DualShock2 &&
+			si.GetBoolValue(section.c_str(), TinyString::from_format("Macro{}SequenceEnabled", i + 1), false))
+		{
+			const std::string text = si.GetStringValue(section.c_str(), TinyString::from_format("Macro{}Sequence", i + 1));
+			if (auto steps = FrameSequence::Parse(text))
+				s_sequences[i] = std::move(steps.value());
+			else
+				Console.Error("Invalid frame sequence in macro %u; playback disabled.", i + 1);
+			continue;
+		}
+
 		std::string binds_string;
 		if (!si.GetStringValue(section.c_str(), TinyString::from_format("Macro{}Binds", i + 1), &binds_string))
 			continue;
@@ -763,10 +904,8 @@ void Pad::SetMacroButtonState(InputBindingKey& key, u32 pad, u32 index, bool sta
 void Pad::ApplyMacroButton(u32 controller, const Pad::MacroButton& mb)
 {
 	const float value = mb.toggle_state ? mb.pressure : 0.0f;
-	PadBase* const pad = Pad::GetPad(controller);
-
 	for (const u32 btn : mb.buttons)
-		pad->Set(btn, value);
+		SetControllerState(controller, btn, value);
 }
 
 void Pad::UpdateMacroButtons()

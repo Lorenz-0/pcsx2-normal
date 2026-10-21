@@ -75,4 +75,10 @@ namespace Pad
 	// Sets the state of the specified macro button.
 	void SetMacroButtonState(InputBindingKey& key, u32 pad, u32 index, bool state);
 	void UpdateMacroButtons();
+
+	// Player 1 DualShock 2 frame sequences, using the existing macro trigger slots.
+	void SetInputSequenceTrigger(u32 index, s32 pressed);
+	void CancelInputSequence();
+	// Called once per emulated input frame, not during paused/idle input polling.
+	void UpdateInputSequence();
 }; // namespace Pad

@@ -1685,6 +1685,7 @@ VMBootResult VMManager::Initialize(const VMBootParameters& boot_params, Error* e
 void VMManager::Shutdown(bool save_resume_state)
 {
 	Internal::ResetFrameAdvanceHotkeyState();
+	Pad::CancelInputSequence();
 
 	// we'll probably already be stopping (this is how Qt calls shutdown),
 	// but just in case, so any of the stuff we call here knows we don't have a valid VM.
@@ -1802,6 +1803,7 @@ void VMManager::Reset()
 {
 	pxAssert(HasValidVM());
 	Internal::ResetFrameAdvanceHotkeyState();
+	Pad::CancelInputSequence();
 
 	// If we're running, we're probably going to be executing this at event test time,
 	// at vsync, which happens in the middle of event handling. Resetting everything
@@ -2948,6 +2950,8 @@ void VMManager::Internal::EntryPointCompilingOnCPUThread()
 void VMManager::Internal::VSyncOnCPUThread()
 {
 	Pad::UpdateMacroButtons();
+	// Finish the previous sequence frame before polling any new trigger events.
+	Pad::UpdateInputSequence();
 
 	Patch::ApplyVsyncPatches();
 
@@ -2987,6 +2991,8 @@ void VMManager::Internal::PollInputOnCPUThread()
 		}
 		// At this point, the PAD data has been read from the user for the current frame
 		// so we can either read from it, or overwrite it!
+		if (g_InputRecording.isActive())
+			Pad::CancelInputSequence();
 		g_InputRecording.handleControllerDataUpdate();
 	}
 }

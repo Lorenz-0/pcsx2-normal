@@ -831,6 +831,7 @@
     <ClInclude Include="SIO\Multitap\MultitapProtocol.h" />
     <ClInclude Include="SIO\Pad\PadBase.h" />
     <ClInclude Include="SIO\Pad\Pad.h" />
+    <ClInclude Include="SIO\Pad\FrameSequence.h" />
     <ClInclude Include="SIO\Pad\PadDualshock2.h" />
     <ClInclude Include="SIO\Pad\PadGuitar.h" />
     <ClInclude Include="SIO\Pad\PadJogcon.h" />
