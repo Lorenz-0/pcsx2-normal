@@ -284,3 +284,39 @@ TEST(FrameSequence, CompactViewCanDisplayAndRepairOverLimitDrafts)
 	EXPECT_EQ(neutral[0].count, MAX_FRAMES);
 	EXPECT_EQ(FindFrameRow(neutral, MAX_FRAMES - 1), 0);
 }
+
+TEST(FrameSequence, InsertedNeutralRowStaysSeparateFromIdenticalNeighbors)
+{
+	const std::vector<std::uint16_t> frames(21, 0);
+	std::vector<std::uint32_t> isolated(frames.size(), 0);
+	isolated[0] = 1;
+	const auto ranges = BuildFrameRanges(frames, true, isolated);
+	ASSERT_EQ(ranges.size(), 2u);
+	EXPECT_EQ(ranges[0].first, 0u);
+	EXPECT_EQ(ranges[0].count, 1u);
+	EXPECT_EQ(ranges[1].first, 1u);
+	EXPECT_EQ(ranges[1].count, 20u);
+	EXPECT_EQ(FindFrameRow(ranges, 0), 0);
+	EXPECT_EQ(FindFrameRow(ranges, 1), 1);
+	EXPECT_EQ(FindFrameRow(ranges, 20), 1);
+	// Display separation must not introduce extra runtime steps or change duration.
+	const auto playback = Compress(frames);
+	ASSERT_TRUE(playback.has_value());
+	EXPECT_EQ(Serialize(playback.value()), "21:Neutral");
+}
+
+TEST(FrameSequence, SeparatelyInsertedRowsDoNotMergeWithEachOther)
+{
+	const std::vector<std::uint16_t> frames(8, 132);
+	const std::vector<std::uint32_t> isolated = {0, 0, 1, 2, 2, 0, 0, 0};
+	const auto ranges = BuildFrameRanges(frames, true, isolated);
+	ASSERT_EQ(ranges.size(), 4u);
+	EXPECT_EQ(ranges[0].count, 2u);
+	EXPECT_EQ(ranges[1].count, 1u);
+	EXPECT_EQ(ranges[2].count, 2u);
+	EXPECT_EQ(ranges[3].count, 3u);
+	const auto expanded = BuildFrameRanges(frames, false, isolated);
+	EXPECT_EQ(expanded.size(), frames.size());
+	EXPECT_EQ(BuildFrameRanges(frames, true).size(), 1u);
+	EXPECT_EQ(BuildFrameRanges(frames, true, std::span(isolated).first(2)).size(), 1u);
+}

@@ -11,6 +11,7 @@
 #include <QtCore/QAbstractTableModel>
 #include <QtCore/QPointer>
 #include <QtCore/QSignalBlocker>
+#include <QtCore/QStringList>
 #include <QtCore/QTimer>
 #include <QtGui/QCloseEvent>
 #include <QtGui/QKeyEvent>
@@ -105,9 +106,12 @@ public:
 			if (count == static_cast<int>(range.count))
 				return true;
 			const auto buttons = frames[range.first];
+			const auto isolated = m_isolated_rows[range.first];
 			beginResetModel();
 			frames.erase(frames.begin() + range.first, frames.begin() + range.first + range.count);
 			frames.insert(frames.begin() + range.first, count, buttons);
+			m_isolated_rows.erase(m_isolated_rows.begin() + range.first, m_isolated_rows.begin() + range.first + range.count);
+			m_isolated_rows.insert(m_isolated_rows.begin() + range.first, count, isolated);
 		}
 		else if (index.column() >= 2 && role == Qt::CheckStateRole)
 		{
@@ -146,25 +150,59 @@ public:
 		refresh();
 		endResetModel();
 	}
-	void replace(std::vector<std::uint16_t> next)
+	void replace(std::vector<std::uint16_t> next, const QString& isolated = {})
 	{
 		beginResetModel();
 		frames = next.empty() ? std::vector<std::uint16_t>{0} : std::move(next);
+		m_isolated_rows.assign(frames.size(), 0);
+		m_next_row_id = 1;
+		loadIsolatedRows(isolated);
 		refresh();
 		endResetModel();
 	}
-	void insertFrames(int row, int count)
+	int insertFrames(int row, int count, bool separate = false)
 	{
 		count = std::min(count, static_cast<int>(MAX_FRAMES) - frameCount());
 		if (count <= 0)
-			return;
+			return -1;
 		const int frame = firstFrame(std::clamp(row, 0, rowCount()));
+		if (separate && m_next_row_id == UINT32_MAX)
+		{
+			// Recycle the ID space without changing which frames belong together.
+			auto ids = m_isolated_rows;
+			std::sort(ids.begin(), ids.end());
+			ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+			for (auto& id : m_isolated_rows)
+			{
+				if (id != 0)
+					id = static_cast<std::uint32_t>(std::lower_bound(ids.begin(), ids.end(), id) - ids.begin()) + 1;
+			}
+			m_next_row_id = static_cast<std::uint32_t>(ids.size()) + 1;
+		}
 		beginResetModel();
 		frames.insert(frames.begin() + frame, count, 0);
+		// Each explicit insertion owns a distinct display ID, even if its buttons
+		// match both neighbors. IDs never participate in the playback program.
+		m_isolated_rows.insert(m_isolated_rows.begin() + frame, count, separate ? m_next_row_id++ : 0);
 		refresh();
 		endResetModel();
 		if (edited)
 			edited();
+		return frame;
+	}
+	QString isolatedRows() const
+	{
+		QStringList rows;
+		for (std::size_t first = 0; first < frames.size();)
+		{
+			std::size_t end = first + 1;
+			while (end < frames.size() && m_isolated_rows[end] == m_isolated_rows[first])
+				end++;
+			if (m_isolated_rows[first] != 0)
+				rows.append(QStringLiteral("%1:%2:%3").arg(first).arg(end - first).arg(m_isolated_rows[first]));
+			first = end;
+		}
+		return rows.join(QLatin1Char(';'));
 	}
 	void deleteFrames(int first, int last)
 	{
@@ -173,8 +211,12 @@ public:
 		const int begin = firstFrame(first), end = firstFrame(last + 1);
 		beginResetModel();
 		frames.erase(frames.begin() + begin, frames.begin() + end);
+		m_isolated_rows.erase(m_isolated_rows.begin() + begin, m_isolated_rows.begin() + end);
 		if (frames.empty())
+		{
 			frames.push_back(0);
+			m_isolated_rows.push_back(0);
+		}
 		refresh();
 		endResetModel();
 		if (edited)
@@ -194,12 +236,38 @@ public:
 	}
 
 private:
+	void loadIsolatedRows(const QString& text)
+	{
+		if (text.isEmpty() || text.size() > MAX_FRAMES * 24)
+			return;
+		std::vector<std::uint32_t> ids(frames.size(), 0);
+		std::uint32_t next = 1;
+		std::size_t previous_end = 0;
+		for (const QString& row : text.split(QLatin1Char(';')))
+		{
+			const QStringList parts = row.split(QLatin1Char(':'));
+			if (parts.size() != 3)
+				return;
+			bool valid_first, valid_count, valid_id;
+			const uint first = parts[0].toUInt(&valid_first), count = parts[1].toUInt(&valid_count), id = parts[2].toUInt(&valid_id);
+			if (!valid_first || !valid_count || !valid_id || id == 0 || id == UINT32_MAX || first < previous_end ||
+				first >= frames.size() || count == 0 || count > frames.size() - first)
+				return;
+			std::fill_n(ids.begin() + first, count, id);
+			next = std::max(next, static_cast<std::uint32_t>(id + 1));
+			previous_end = first + count;
+		}
+		m_isolated_rows = std::move(ids);
+		m_next_row_id = next;
+	}
 	void refresh()
 	{
-		m_ranges = BuildFrameRanges(frames, m_compact);
+		m_ranges = BuildFrameRanges(frames, m_compact, m_isolated_rows);
 		m_playhead = -1;
 	}
 	std::vector<FrameRange> m_ranges = {{0, 1}};
+	std::vector<std::uint32_t> m_isolated_rows = {0};
+	std::uint32_t m_next_row_id = 1;
 	bool m_compact = true;
 	int m_playhead = -1;
 };
@@ -269,7 +337,8 @@ FrameSequenceWindow::FrameSequenceWindow(QWidget* parent)
 	QVBoxLayout* layout = new QVBoxLayout(central);
 	QLabel* help = new QLabel(tr("Compact rows combine identical held inputs or Neutral. Double-click Frames to change their duration. "
 								 "Use Arm + Pause, then Frame Advance to test from frame 1. Edits apply on the next Arm/Play. "
-								 "Button edits affect the whole row. Uncheck Compact frames to edit individual frames."),
+								 "Button edits affect the whole row. Insert Before Selection keeps the new row separate. "
+								 "Uncheck Compact frames to edit individual frames."),
 		central);
 	help->setWordWrap(true);
 	layout->addWidget(help);
@@ -307,7 +376,15 @@ FrameSequenceWindow::FrameSequenceWindow(QWidget* parent)
 	layout->addLayout(rows);
 	connect(append, &QPushButton::clicked, this, [this]() { m_model->insertFrames(m_model->rowCount(), m_add_count->value()); });
 	connect(insert, &QPushButton::clicked, this, [this]() {
-		m_model->insertFrames(m_table->currentIndex().isValid() ? m_table->currentIndex().row() : 0, m_add_count->value());
+		const int frame = m_model->insertFrames(m_table->currentIndex().isValid() ? m_table->currentIndex().row() : 0,
+			m_add_count->value(), true);
+		if (frame >= 0)
+		{
+			const QModelIndex index = m_model->index(m_model->frameRow(frame), 2);
+			m_table->setCurrentIndex(index);
+			m_table->scrollTo(index);
+			m_table->setFocus();
+		}
 	});
 	connect(remove, &QPushButton::clicked, this, [this]() {
 		const QModelIndexList selection = m_table->selectionModel()->selectedIndexes();
@@ -370,7 +447,8 @@ void FrameSequenceWindow::loadSlot(int index)
 	const std::string stored = Host::GetBaseStringSettingValue("Pad1", (prefix + "Sequence").c_str());
 	const auto steps = Parse(stored);
 	const auto frames = steps.has_value() ? Expand(steps.value()) : std::nullopt;
-	m_model->replace(frames.has_value() ? frames.value() : std::vector<std::uint16_t>{0});
+	m_model->replace(frames.has_value() ? frames.value() : std::vector<std::uint16_t>{0},
+		QString::fromStdString(Host::GetBaseStringSettingValue("Pad1", (prefix + "SequenceRows").c_str())));
 	m_message->setText(!stored.empty() && !steps.has_value() ? tr("Invalid saved combo. Correct the timeline before saving.") :
 															   tr("Global Player 1 macro slot. Save enables its bound trigger; Play uses this timeline directly, even with an input profile."));
 	m_loading = false;
@@ -393,6 +471,7 @@ bool FrameSequenceWindow::saveSlot()
 		settings->SetStringValue("Pad1", (prefix + "SequenceName").c_str(), m_name->text().toUtf8().constData());
 		settings->SetStringValue("Pad1", (prefix + "Sequence").c_str(), Serialize(steps.value()).c_str());
 		settings->SetBoolValue("Pad1", (prefix + "SequenceEnabled").c_str(), true);
+		settings->SetStringValue("Pad1", (prefix + "SequenceRows").c_str(), m_model->isolatedRows().toUtf8().constData());
 	}
 	Host::CommitBaseSettingChanges();
 	g_emu_thread->applySettings();

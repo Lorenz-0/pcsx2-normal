@@ -168,12 +168,16 @@ namespace Pad::FrameSequence
 		std::size_t count;
 	};
 
-	inline std::vector<FrameRange> BuildFrameRanges(std::span<const std::uint16_t> frames, bool compact)
+	// Nonzero display IDs keep explicitly inserted rows separate from neighbors.
+	// IDs are editor metadata, never additional input states or timing boundaries.
+	inline std::vector<FrameRange> BuildFrameRanges(std::span<const std::uint16_t> frames, bool compact,
+		std::span<const std::uint32_t> isolated_rows = {})
 	{
 		std::vector<FrameRange> ranges;
 		for (std::size_t frame = 0; frame < frames.size(); frame++)
 		{
-			if (compact && frame > 0 && frames[frame] == frames[frame - 1])
+			if (compact && frame > 0 && frames[frame] == frames[frame - 1] &&
+				(isolated_rows.size() != frames.size() || isolated_rows[frame] == isolated_rows[frame - 1]))
 				ranges.back().count++;
 			else
 				ranges.push_back({frame, 1});

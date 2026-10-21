@@ -16,10 +16,16 @@ rerecording, automatic input capture, or seek-to-frame emulation.
    held for 4 frames. **Frame range** shows the actual start/end frames and
    **Frames** shows the duration. Double-click **Frames** to edit that duration.
    Click button checkboxes to change the inputs for the **whole compacted row**.
-   Identical neighboring rows merge automatically after editing.
+   Identical neighboring rows merge automatically after editing, except for rows
+   explicitly created with **Insert Before Selection**.
 3. Use the frame-count box with **Append Neutral** or **Insert Before Selection**
-   to add frames. Select rows and use **Delete Selected Rows** to remove their
-   entire frame ranges. At least one neutral frame always remains.
+   to add frames. **Insert Before Selection** creates its own editable row, even
+   when its neutral inputs match the neighboring block. With the count set to 1,
+   this inserts a single standalone frame and selects it for editing. A larger
+   count creates a separate block of that duration. These row separations survive
+   view changes and Save/reopen; they never affect playback timing or input-group
+   limits. **Append Neutral** still extends an ordinary trailing neutral block.
+   Select rows and use **Delete Selected Rows** to remove their entire ranges. At least one neutral frame always remains.
    To edit, insert, or delete inside a held/neutral range, uncheck **Compact
    frames** first: every frame is then shown separately, with the same button
    controls. Switching views never changes any inputs or their timing.
